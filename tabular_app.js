@@ -11,6 +11,11 @@ export const SEEDS = {
   trainOrder: 777    
 };
 
+await tf.setBackend('webgl');              
+if (tf.env().get('WEBGL_VERSION') != null) {
+  tf.env().set('WEBGL_DETERMINISTIC', true);  
+}
+
 const fileInput = document.getElementById('fileInput');
 const fileName = document.getElementById('fileName');
 const statusEl = document.getElementById('status');
