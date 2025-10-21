@@ -74,30 +74,32 @@ export function buildTabularTensors(rows, schema, trainFrac=0.8) {
   }));
 
   const y = rows.map(r=> isNumeric(r['price']) ? Math.log1p(Number(r['price'])) : NaN );
-  const validIdx = y.map((v,i)=> Number.isFinite(v) ? i : -1).filter(i=> i>=0);
+  function shuffleWithSeed(arr, seed) {
+    function rnd() { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; }
+    return arr.map(x => [rnd(), x]).sort((a,b)=> a[0] - b[0]).map(p => p[1]);
+  }
 
-  function pick(indexes, arr){ return indexes.map(i=> arr[i]); }
+  const valid = yLog.map((v,i)=> Number.isFinite(v) ? i : -1).filter(i=> i>=0);
+  const tr = trIdx.filter(i=> valid.includes(i));
+  const te = teIdx.filter(i=> valid.includes(i));
 
-  const XnumAll = pick(validIdx, XnumScaled);
-  const yAll = pick(validIdx, y);
-  const XcatsAll = Xcats.map(col => pick(validIdx, col));
+  const trainOrder = shuffleWithSeed([...tr], SEEDS.trainOrder); 
 
-  const tr = trIdx.filter(i=> validIdx.includes(i));
-  const te = teIdx.filter(i=> validIdx.includes(i));
+  const XnumTrainArr = trainOrder.map(i=> XnumScaled[i]);
+  const yTrainArr    = trainOrder.map(i=> yLog[i]);
+  const XcatsTrainArrs = Xcats.map(col => trainOrder.map(i=> col[i]));
 
-  const XnumTrain = pick(tr, XnumAll);
-  const XnumTest  = pick(te, XnumAll);
-  const yTrain = pick(tr, yAll);
-  const yTest  = pick(te, yAll);
-  const XcatsTrain = XcatsAll.map(col => pick(tr, col));
-  const XcatsTest  = XcatsAll.map(col => pick(te, col));
+  const XnumTestArr = te.map(i=> XnumScaled[i]);
+  const yTestArr    = te.map(i=> yLog[i]);
+  const XcatsTestArrs = Xcats.map(col => te.map(i=> col[i]));
+  
+  const XnumTrainT = tf.tensor2d(XnumTrainArr);
+  const XnumTestT  = tf.tensor2d(XnumTestArr);
+  const yTrainT    = tf.tensor2d(yTrainArr, [yTrainArr.length, 1]);
+  const yTestT     = tf.tensor2d(yTestArr,  [yTestArr.length, 1]);
 
-  const XnumTrainT = tf.tensor2d(XnumTrain);
-  const XnumTestT  = tf.tensor2d(XnumTest);
-  const yTrainT = tf.tensor2d(yTrain, [yTrain.length, 1]);
-  const yTestT  = tf.tensor2d(yTest,  [yTest.length, 1]);
-  const XcatsTrainT = XcatsTrain.map(col => tf.tensor2d(col, [col.length, 1], 'int32'));
-  const XcatsTestT  = XcatsTest.map(col => tf.tensor2d(col, [col.length, 1], 'int32'));
+  const XcatsTrainT = XcatsTrainArrs.map(col => tf.tensor2d(col, [col.length, 1], 'int32'));
+  const XcatsTestT  = XcatsTestArrs.map(col => tf.tensor2d(col, [col.length, 1], 'int32'));
 
   return {
     Xtrain: [XnumTrainT, ...XcatsTrainT],
