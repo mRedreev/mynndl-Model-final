@@ -4,6 +4,13 @@ import { buildTabularModel, fitModel, evaluate } from './tabular_model.js';
 
 const st = { model: null, schema: null, tensors: null, batch: 32, epochs: 200 };
 
+export const SEEDS = {
+  split: 42,      
+  kfold: 1337,     
+  initBase: 2000,    
+  trainOrder: 777    
+};
+
 const fileInput = document.getElementById('fileInput');
 const fileName = document.getElementById('fileName');
 const statusEl = document.getElementById('status');
