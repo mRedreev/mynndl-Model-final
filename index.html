@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>TF.js Tabular — Car Price Regression (Embeddings + MLP)</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root { --bg:#0b1020; --card:#111833; --muted:#aab2d5; --text:#e7ecff; --accent:#6aa3ff; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: Inter, system-ui, Segoe UI, Roboto, Arial, sans-serif; background: var(--bg); color: var(--text); }
+    header { padding: 34px 20px 22px; text-align:center; border-bottom: 1px solid #1a2247; }
+    header h1 { margin: 0 0 8px; font-size: 24px; }
+    header p { margin: 0 auto; color: var(--muted); max-width: 980px; line-height: 1.5; font-size: 14px; }
+    main { max-width: 1140px; margin: 0 auto; padding: 24px; display: grid; grid-template-columns: 360px 1fr; gap: 20px; }
+    .panel { background: var(--card); border: 1px solid #1a2247; border-radius: 18px; padding: 18px; }
+    .panel h2 { font-size: 16px; margin: 0 0 12px; }
+    .row { display:flex; align-items:center; gap:12px; margin: 10px 0; }
+    .muted { color: var(--muted); font-size: 13px; }
+    label.button { display:inline-block; background: #1a254d; padding: 10px 12px; border-radius: 12px; cursor: pointer; font-weight:600; }
+    label.button:hover { background: #203061; }
+    input[type=file] { display:none; }
+    button.primary { background: var(--accent); color: #04112b; border: none; border-radius: 12px; padding: 10px 14px; font-weight: 700; cursor: pointer; }
+    button.primary:disabled { opacity: .5; cursor: not-allowed; }
+    .btn-row { display:flex; gap:10px; flex-wrap:wrap; }
+    progress { width: 100%; height: 10px; }
+    .grid2 { display:grid; grid-template-columns: 1fr 1fr; gap:16px; }
+    canvas { width: 100%; height: 260px; background:#0f1430; border:1px solid #1a2247; border-radius: 12px; }
+    code { background:#0f1530; padding:2px 6px; border-radius:6px; }
+    table { width:100%; border-collapse: collapse; font-size: 13px; }
+    th, td { padding: 8px 10px; border-bottom: 1px solid #1a2247; text-align: right; }
+    th:first-child, td:first-child { text-align: left; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Car Price Regression — Tabular (TF.js Embeddings + MLP)</h1>
+    <p>
+      This version is optimized for tabular data: numeric features are standardized (z‑score),
+      categorical features use trainable embeddings, and the model is a deep MLP with batch norm and dropout.
+      The target is <code>log(price)</code> for stability; metrics are reported in original price units.
+    </p>
+  </header>
+  <main>
+    <section class="panel">
+      <h2>1) Load Data</h2>
+      <div class="row">
+        <label class="button">
+          <input id="fileInput" type="file" accept=".csv"/>
+          Choose CSV
+        </label>
+        <span id="fileName" class="muted">No file selected</span>
+      </div>
+      <p class="muted">Delimiters <code>,</code> and <code>;</code> are supported. Missing values or <code>?</code> are ignored.</p>
+      <div class="row"><span id="status" class="muted">Waiting for file…</span></div>
+      <h2>2) Train</h2>
+      <div class="btn-row">
+        <button id="trainBtn" class="primary" disabled>Train</button>
+        <button id="evalBtn" class="primary" disabled>Evaluate</button>
+        <button id="saveBtn" class="primary" disabled>Save Weights</button>
+        <button id="loadBtn" class="primary">Load Weights</button>
+      </div>
+      <div class="row" style="align-items:flex-start">
+        <div style="flex:1">
+          <div class="muted" style="font-size:12px">Progress</div>
+          <progress id="progress" value="0" max="1"></progress>
+        </div>
+        <div id="epochText" class="muted" style="font-size:12px"></div>
+      </div>
+    </section>
+    <section class="panel">
+      <h2>Results</h2>
+      <div id="summary" class="muted" style="font-size:12px">No results yet.</div>
+      <div class="grid2" style="margin-top:12px">
+        <div>
+          <h3 style="margin:6px 0 8px">Metrics</h3>
+          <table id="metricsTbl">
+            <thead><tr><th>Split</th><th>MAE</th><th>RMSE</th><th>R²</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div>
+          <h3 style="margin:6px 0 8px">Actual vs Predicted</h3>
+          <canvas id="scatter" aria-label="Scatter plot of actual vs predicted prices"></canvas>
+        </div>
+      </div>
+    </section>
+  </main>
+  <script type="module" src="./tabular_app.js"></script>
+</body>
+</html>
