@@ -1,31 +1,36 @@
-// tabular_app.js — English UI for tabular model (embeddings + MLP)
+// tabular_app.js — deterministic training + UI flow
 import { parseCarsCSV, analyzeColumns, buildTabularTensors } from './tabular_loader.js';
 import { buildTabularModel, fitModel, evaluate } from './tabular_model.js';
 
-const st = { model: null, schema: null, tensors: null, batch: 32, epochs: 200 };
-
+// ---- global deterministic seeds ----
 export const SEEDS = {
-  split: 42,      
-  kfold: 1337,     
-  initBase: 2000,    
-  trainOrder: 777    
+  split: 42,        // stratified train/test by 'make'
+  kfold: 1337,      // K-fold target encoding
+  initBase: 2000,   // Embedding initializers base
+  trainOrder: 777   // single shuffle of train set
 };
 
-await tf.setBackend('webgl');              
-if (tf.env().get('WEBGL_VERSION') != null) {
-  tf.env().set('WEBGL_DETERMINISTIC', true);  
-}
+const st = { model:null, schema:null, tensors:null, batch:128, epochs:500 };
+
+// set deterministic backend before anything else
+(async () => {
+  await tf.ready();
+  await tf.setBackend('webgl'); // 'cpu' is even more deterministic but slower
+  if (tf.env().get('WEBGL_VERSION') != null) {
+    tf.env().set('WEBGL_DETERMINISTIC', true);
+  }
+})();
 
 const fileInput = document.getElementById('fileInput');
-const fileName = document.getElementById('fileName');
-const statusEl = document.getElementById('status');
-const trainBtn = document.getElementById('trainBtn');
-const evalBtn = document.getElementById('evalBtn');
-const progressEl = document.getElementById('progress');
+const fileName  = document.getElementById('fileName');
+const statusEl  = document.getElementById('status');
+const trainBtn  = document.getElementById('trainBtn');
+const evalBtn   = document.getElementById('evalBtn');
+const progressEl= document.getElementById('progress');
 const epochText = document.getElementById('epochText');
-const summary = document.getElementById('summary');
-const saveBtn = document.getElementById('saveBtn');
-const loadBtn = document.getElementById('loadBtn');
+const summary   = document.getElementById('summary');
+const saveBtn   = document.getElementById('saveBtn');
+const loadBtn   = document.getElementById('loadBtn');
 
 fileInput.addEventListener('change', async (e)=> {
   const f = e.target.files?.[0];
@@ -33,8 +38,10 @@ fileInput.addEventListener('change', async (e)=> {
   fileName.textContent = f.name;
   statusEl.textContent = 'Parsing CSV…';
   try {
-    const rows = await parseCarsCSV(f);
+    const rows   = await parseCarsCSV(f);
     const schema = analyzeColumns(rows, 'price');
+    // pass seeds down through schema so loader sees them
+    schema.__seeds = { ...SEEDS };
     const tensors = buildTabularTensors(rows, schema, 0.8);
     st.schema = schema; st.tensors = tensors;
     statusEl.textContent = `Ready: ${rows.length} rows — numeric: ${schema.numCols.length}, categorical: ${schema.catCols.length}.`;
@@ -48,14 +55,32 @@ fileInput.addEventListener('change', async (e)=> {
 trainBtn.addEventListener('click', async ()=> {
   trainBtn.disabled = true;
   statusEl.textContent = 'Building model…';
-  st.model = buildTabularModel(st.schema);
+  st.model = buildTabularModel(st.schema, {
+    initBase: SEEDS.initBase, kDense1:301, kDense2:302, kDense3:303, kOut:304, kNum:101
+  });
   statusEl.textContent = 'Training…';
   progressEl.value = 0; epochText.textContent = '';
+  st.__best = Infinity; st.__stall = 0;
+
   await fitModel(st.model, st.tensors, {
-    epochs: st.epochs, batchSize: st.batch, validationSplit: 0.15, shuffle: false,
-    onEpoch: (ep, logs)=> {
+    epochs: st.epochs,
+    batchSize: st.batch,
+    validationSplit: 0.20,
+    shuffle: false, // single deterministic shuffle happens in the loader
+    onEpoch: async (ep, logs)=> {
       progressEl.value = (ep+1)/st.epochs;
       epochText.textContent = `Epoch ${ep+1}/${st.epochs} — loss ${logs.loss.toFixed(4)} — val_loss ${logs.val_loss?.toFixed(4) ?? '-'} — MAE ${logs.mae.toFixed(2)}`;
+
+      // ReduceLROnPlateau (patience=8) + EarlyStopping (patience=20)
+      if (logs.val_loss != null) {
+        if (logs.val_loss + 1e-6 < st.__best) { st.__best = logs.val_loss; st.__stall = 0; }
+        else { st.__stall++; }
+        if (st.__stall === 8) {
+          const opt = st.model.optimizer;
+          opt.learningRate = (opt.learningRate ?? 0.0006) * 0.5;
+        }
+        if (st.__stall > 20) { st.model.stopTraining = true; } // not "this.stopTraining"
+      }
     }
   });
   statusEl.textContent = 'Trained.';
@@ -67,7 +92,7 @@ evalBtn.addEventListener('click', async ()=> {
   const mTrain = await evaluate(st.model, st.tensors.Xtrain, st.tensors.ytrain, st.schema);
   const mTest  = await evaluate(st.model, st.tensors.Xtest,  st.tensors.ytest,  st.schema, true);
   appendMetrics('train', mTrain);
-  appendMetrics('test', mTest);
+  appendMetrics('test',  mTest);
   summary.textContent = `Test MAE: ${mTest.mae.toFixed(2)}, RMSE: ${mTest.rmse.toFixed(2)}, R²: ${mTest.r2.toFixed(3)} (n=${st.tensors.ytest.shape[0]}).`;
   drawScatter(mTest.yTrue, mTest.yPred);
 });
