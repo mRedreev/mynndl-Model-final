@@ -40,7 +40,7 @@ trainBtn.addEventListener('click', async ()=> {
   statusEl.textContent = 'Training…';
   progressEl.value = 0; epochText.textContent = '';
   await fitModel(st.model, st.tensors, {
-    epochs: st.epochs, batchSize: st.batch, validationSplit: 0.15,
+    epochs: st.epochs, batchSize: st.batch, validationSplit: 0.15, shuffle: false,
     onEpoch: (ep, logs)=> {
       progressEl.value = (ep+1)/st.epochs;
       epochText.textContent = `Epoch ${ep+1}/${st.epochs} — loss ${logs.loss.toFixed(4)} — val_loss ${logs.val_loss?.toFixed(4) ?? '-'} — MAE ${logs.mae.toFixed(2)}`;
